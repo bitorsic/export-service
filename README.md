@@ -1,10 +1,10 @@
 # Async Bulk Export Service
 
-A Go backend service for exporting large relational datasets (CSV) asynchronously — built around a bounded worker pool, backpressure, and graceful shutdown, with a PostgreSQL-backed job queue.
+A Go backend service for exporting large relational datasets (CSV) asynchronously - built around a bounded worker pool, backpressure, and graceful shutdown, with a PostgreSQL-backed job queue.
 
 ## The problem
 
-Generating a large export (e.g., a seller's full order history) synchronously inside an HTTP request doesn't scale — long-running queries risk timeouts and block the server from handling other requests. This service decouples "accept the export request" from "do the work," processing exports asynchronously via a background worker pool while the client polls for status.
+Generating a large export (e.g., a seller's full order history) synchronously inside an HTTP request doesn't scale - long-running queries risk timeouts and block the server from handling other requests. This service decouples "accept the export request" from "do the work," processing exports asynchronously via a background worker pool while the client polls for status.
 
 ## Architecture
 
@@ -30,20 +30,20 @@ Client
 
 ## Tech stack
 
-- **Go** — HTTP API, worker pool, concurrency handling
-- **PostgreSQL** — relational data store and durable job-state tracking
-- **Docker Compose** — local Postgres environment
+- **Go** - HTTP API, worker pool, concurrency handling
+- **PostgreSQL** - relational data store and durable job-state tracking
+- **Docker Compose** - local Postgres environment
 
 ## Key design decisions
 
-- **Bounded worker pool**: a fixed number of goroutines process jobs concurrently, rather than spawning a goroutine per request — this keeps resource usage (DB connections, memory) predictable under load.
+- **Bounded worker pool**: a fixed number of goroutines process jobs concurrently, rather than spawning a goroutine per request - this keeps resource usage (DB connections, memory) predictable under load.
 - **Backpressure**: the job queue has a fixed capacity. Once full, new export requests are rejected with a clear "busy, try again" response instead of queuing indefinitely.
 - **Graceful shutdown**: on shutdown signal, the service stops accepting new jobs but lets in-flight exports finish cleanly before exiting, avoiding corrupted output files.
 - **Durable job state**: job status lives in PostgreSQL rather than only in memory, so it survives restarts and supports querying job history.
 
 ## Data
 
-The database is seeded with realistic, relationally-consistent synthetic data (sellers, customers, products, orders, and order items) at a scale of several million rows, generated with [`gofakeit`](https://github.com/brianvoe/gofakeit). Seller order volume is deliberately distributed unevenly, reflecting how real marketplace order volume tends to concentrate among a subset of sellers — this keeps query behavior realistic at scale.
+The database is seeded with realistic, relationally-consistent synthetic data (sellers, customers, products, orders, and order items) at a scale of several million rows, generated with [`gofakeit`](https://github.com/brianvoe/gofakeit). Seller order volume is deliberately distributed unevenly, reflecting how real marketplace order volume tends to concentrate among a subset of sellers - this keeps query behavior realistic at scale.
 
 ## Status
 
