@@ -14,6 +14,7 @@ import (
 	"github.com/bitorsic/export-service/internal/db"
 	"github.com/bitorsic/export-service/internal/jobs"
 	"github.com/bitorsic/export-service/internal/queue"
+	"github.com/bitorsic/export-service/internal/worker"
 )
 
 func main() {
@@ -46,8 +47,17 @@ func main() {
 		}
 	}()
 
-	// TODO: start worker pool (internal/worker) — fixed-size pool of
-	// goroutines pulling jobs off jobQueue.Jobs() and processing exports.
+	// workerCtx is separate from the top-level ctx so we can cancel it
+	// independently during shutdown — this is the signal that tells
+	// workers "stop picking up new jobs."
+	workerCtx, cancelWorkers := context.WithCancel(ctx)
+
+	workerPool := worker.NewPool(5, jobQueue, jobStore, pool)
+	var workersDone = make(chan struct{})
+	go func() {
+		workerPool.Start(workerCtx)
+		close(workersDone)
+	}()
 
 	// Wait for shutdown signal.
 	sig := make(chan os.Signal, 1)
@@ -64,7 +74,12 @@ func main() {
 		log.Printf("[main] HTTP server shutdown error: %v", err)
 	}
 
-	// TODO: cancel worker pool context, let in-flight jobs finish
+	// Signal workers to stop picking up NEW jobs, then wait for any
+	// in-flight export to finish (runExport checks ctx.Err() to avoid
+	// running forever) before we exit.
+	cancelWorkers()
+	<-workersDone
+	log.Println("[main] worker pool drained")
 
 	log.Println("[main] graceful shutdown complete")
 }

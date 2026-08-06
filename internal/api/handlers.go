@@ -3,8 +3,10 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
+	"path/filepath"
 	"time"
 
 	"github.com/bitorsic/export-service/internal/jobs"
@@ -82,12 +84,12 @@ func (h *Handler) CreateExport(w http.ResponseWriter, r *http.Request) {
 }
 
 type jobStatusResponse struct {
-	JobID    string  `json:"job_id"`
-	Status   string  `json:"status"`
-	FilePath *string `json:"file_path,omitempty"`
-	Error    *string `json:"error,omitempty"`
+	JobID  string  `json:"job_id"`
+	Status string  `json:"status"`
+	Error  *string `json:"error,omitempty"`
 }
 
+// GetExport handles GET /exports/{id}.
 func (h *Handler) GetExport(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
@@ -103,10 +105,9 @@ func (h *Handler) GetExport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, jobStatusResponse{
-		JobID:    job.ID,
-		Status:   string(job.Status),
-		FilePath: job.FilePath,
-		Error:    job.Error,
+		JobID:  job.ID,
+		Status: string(job.Status),
+		Error:  job.Error,
 	})
 }
 
@@ -119,14 +120,26 @@ func (h *Handler) DownloadExport(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to fetch job")
 		return
 	}
+
 	if job == nil {
 		writeError(w, http.StatusNotFound, "job not found")
 		return
 	}
-	if job.Status != jobs.StatusDone || job.FilePath == nil {
+
+	if job.Status == jobs.StatusPending || job.Status == jobs.StatusProcessing {
 		writeError(w, http.StatusConflict, "export is not ready yet")
 		return
 	}
+
+	if job.Status == jobs.StatusFailed {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("export failed with error: %v", *job.Error))
+		return
+	}
+
+	// serve as a downloadable
+	downloadName := filepath.Base(*job.FilePath)
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, downloadName))
 
 	http.ServeFile(w, r, *job.FilePath)
 }
