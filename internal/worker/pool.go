@@ -12,6 +12,7 @@ import (
 
 	"github.com/bitorsic/export-service/internal/jobs"
 	"github.com/bitorsic/export-service/internal/queue"
+	"github.com/bitorsic/export-service/internal/stats"
 )
 
 type Pool struct {
@@ -88,6 +89,7 @@ func (p *Pool) process(ctx context.Context, workerID int, jobID string) {
 		if markErr := p.store.MarkFailed(ctx, jobID, err); markErr != nil {
 			log.Printf("[worker %d] additionally failed to mark job %s failed: %v", workerID, jobID, markErr)
 		}
+		stats.IncrementFailed()
 		return
 	}
 
@@ -96,5 +98,6 @@ func (p *Pool) process(ctx context.Context, workerID int, jobID string) {
 		return
 	}
 
+	stats.IncrementCompleted()
 	log.Printf("[worker %d] completed job %s -> %s", workerID, jobID, filePath)
 }

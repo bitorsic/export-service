@@ -11,6 +11,7 @@ import (
 
 	"github.com/bitorsic/export-service/internal/jobs"
 	"github.com/bitorsic/export-service/internal/queue"
+	"github.com/bitorsic/export-service/internal/stats"
 )
 
 type Handler struct {
@@ -68,7 +69,6 @@ func (h *Handler) CreateExport(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.queue.Enqueue(jobID); err != nil {
 		if errors.Is(err, queue.ErrFull) {
-			// backpressure path
 			if delErr := h.store.Delete(r.Context(), jobID); delErr != nil {
 				log.Printf("[api] failed to roll back orphaned job %s: %v", jobID, delErr)
 			}
@@ -120,7 +120,6 @@ func (h *Handler) DownloadExport(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to fetch job")
 		return
 	}
-
 	if job == nil {
 		writeError(w, http.StatusNotFound, "job not found")
 		return
@@ -132,16 +131,31 @@ func (h *Handler) DownloadExport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if job.Status == jobs.StatusFailed {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("export failed with error: %v", *job.Error))
+		msg := "unknown error"
+		if job.Error != nil {
+			msg = *job.Error
+		}
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("export failed: %s", msg))
 		return
 	}
 
-	// serve as a downloadable
 	downloadName := filepath.Base(*job.FilePath)
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, downloadName))
-
 	http.ServeFile(w, r, *job.FilePath)
+}
+
+type statsResponse struct {
+	JobsCompletedSinceStartup int `json:"jobs_completed_since_startup"`
+	JobsFailedSinceStartup    int `json:"jobs_failed_since_startup"`
+}
+
+func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
+	s := stats.Snapshot()
+	writeJSON(w, http.StatusOK, statsResponse{
+		JobsCompletedSinceStartup: s.JobsCompletedSinceStartup,
+		JobsFailedSinceStartup:    s.JobsFailedSinceStartup,
+	})
 }
 
 // --- small helpers ---
