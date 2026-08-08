@@ -3,20 +3,29 @@
 // process has been running.
 package stats
 
+import "sync/atomic"
+
 type Counters struct {
-	JobsCompletedSinceStartup int
-	JobsFailedSinceStartup    int
+	JobsCompletedSinceStartup int64
+	JobsFailedSinceStartup    int64
 }
 
-var current = &Counters{}
+var (
+	completed atomic.Int64
+	failed    atomic.Int64
+)
 
 func IncrementCompleted() {
-	current.JobsCompletedSinceStartup++
+	completed.Add(1)
 }
 
 func IncrementFailed() {
-	current.JobsFailedSinceStartup++
+	failed.Add(1)
 }
+
 func Snapshot() Counters {
-	return *current
+	return Counters{
+		JobsCompletedSinceStartup: completed.Load(),
+		JobsFailedSinceStartup:    failed.Load(),
+	}
 }

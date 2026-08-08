@@ -146,8 +146,8 @@ func (h *Handler) DownloadExport(w http.ResponseWriter, r *http.Request) {
 }
 
 type statsResponse struct {
-	JobsCompletedSinceStartup int `json:"jobs_completed_since_startup"`
-	JobsFailedSinceStartup    int `json:"jobs_failed_since_startup"`
+	JobsCompletedSinceStartup int64 `json:"jobs_completed_since_startup"`
+	JobsFailedSinceStartup    int64 `json:"jobs_failed_since_startup"`
 }
 
 func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
